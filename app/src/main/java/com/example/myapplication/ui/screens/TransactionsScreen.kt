@@ -44,6 +44,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -241,14 +242,13 @@ fun SwipeToDismissTransactionItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else false
+    val dismissState = rememberSwipeToDismissBoxState()
+
+    LaunchedEffect(dismissState.currentValue) {
+        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
+            onDelete()
         }
-    )
+    }
 
     SwipeToDismissBox(
         state = dismissState,
@@ -325,11 +325,12 @@ fun SwipeToDismissTransactionItem(
 fun TransactionFormBottomSheet(
     transaction: Transaction?,
     viewModel: LedgerlyViewModel,
+    defaultType: String = "expense",
     onDismiss: () -> Unit
 ) {
     val isEdit = transaction != null
 
-    var type by remember { mutableStateOf(transaction?.type ?: "expense") }
+    var type by remember { mutableStateOf(transaction?.type ?: defaultType) }
     var amountText by remember { mutableStateOf(transaction?.amount?.toString() ?: "") }
     var category by remember { mutableStateOf(transaction?.category ?: "Food") }
     var method by remember { mutableStateOf(transaction?.method ?: "cash") }

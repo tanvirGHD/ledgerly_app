@@ -43,7 +43,7 @@ val chartColors = listOf(
     Color(0xFFEF4444)  // Red
 )
 
-// 1. Line Chart for Income vs Expense (6 Months)
+// 1. Line Chart for Income vs Expense
 @Composable
 fun LineChart(
     data: List<MonthStat>,
@@ -53,13 +53,13 @@ fun LineChart(
 ) {
     if (data.isEmpty()) return
 
-    val maxVal = max(1.0, data.maxOf { max(it.income, it.expense) })
+    val maxVal = max(1.0, data.maxOf { max(it.income, it.expense) }) * 1.15
 
     Column(modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(200.dp)
         ) {
             val width = size.width
             val height = size.height
@@ -73,16 +73,17 @@ fun LineChart(
             for (i in 0..3) {
                 val y = padding + (chartHeight / 3) * i
                 drawLine(
-                    color = Color.Gray.copy(alpha = 0.2f),
+                    color = Color.Gray.copy(alpha = 0.15f),
                     start = Offset(padding, y),
                     end = Offset(width - padding, y),
                     strokeWidth = 2f
                 )
             }
 
-            // Income Path
             val incomePath = Path()
             val expensePath = Path()
+            val incomeFillPath = Path()
+            val expenseFillPath = Path()
 
             data.forEachIndexed { index, stat ->
                 val x = padding + (index * stepX)
@@ -92,19 +93,43 @@ fun LineChart(
                 if (index == 0) {
                     incomePath.moveTo(x, yInc)
                     expensePath.moveTo(x, yExp)
+                    incomeFillPath.moveTo(x, height - padding)
+                    incomeFillPath.lineTo(x, yInc)
+                    expenseFillPath.moveTo(x, height - padding)
+                    expenseFillPath.lineTo(x, yExp)
                 } else {
                     incomePath.lineTo(x, yInc)
                     expensePath.lineTo(x, yExp)
+                    incomeFillPath.lineTo(x, yInc)
+                    expenseFillPath.lineTo(x, yExp)
                 }
 
-                // Draw points
-                drawCircle(color = incomeColor, radius = 8f, center = Offset(x, yInc))
-                drawCircle(color = expenseColor, radius = 8f, center = Offset(x, yExp))
+                if (index == data.size - 1) {
+                    incomeFillPath.lineTo(x, height - padding)
+                    expenseFillPath.lineTo(x, height - padding)
+                }
             }
 
+            // Draw area fills
+            drawPath(path = incomeFillPath, color = incomeColor.copy(alpha = 0.15f))
+            drawPath(path = expenseFillPath, color = expenseColor.copy(alpha = 0.15f))
+
             // Draw line strokes
-            drawPath(path = incomePath, color = incomeColor, style = Stroke(width = 5f))
-            drawPath(path = expensePath, color = expenseColor, style = Stroke(width = 5f))
+            drawPath(path = incomePath, color = incomeColor, style = Stroke(width = 4f))
+            drawPath(path = expensePath, color = expenseColor, style = Stroke(width = 4f))
+
+            // Draw data points
+            data.forEachIndexed { index, stat ->
+                val x = padding + (index * stepX)
+                val yInc = height - padding - ((stat.income / maxVal) * chartHeight).toFloat()
+                val yExp = height - padding - ((stat.expense / maxVal) * chartHeight).toFloat()
+
+                drawCircle(color = incomeColor, radius = 6f, center = Offset(x, yInc))
+                drawCircle(color = Color.White, radius = 3f, center = Offset(x, yInc))
+
+                drawCircle(color = expenseColor, radius = 6f, center = Offset(x, yExp))
+                drawCircle(color = Color.White, radius = 3f, center = Offset(x, yExp))
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

@@ -16,18 +16,29 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -55,6 +66,10 @@ fun DashboardScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val symbol = if (currency == "BDT") "৳" else "$"
+
+    var showBottomSheet by remember { mutableStateOf(false) }
+    var bottomSheetDefaultType by remember { mutableStateOf("expense") }
+    val sheetState = rememberModalBottomSheetState()
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -88,7 +103,7 @@ fun DashboardScreen(
                     )
                 }
 
-                // 1. Gradient Balance Header Card
+                // 1. Total Balance Card with Gradient Background
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -101,19 +116,19 @@ fun DashboardScreen(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
                                         Color(0xFF0D9488), // Deep Teal
-                                        Color(0xFF2563EB)  // Royal Blue
+                                        Color(0xFF10B981)  // Mint Green
                                     )
                                 )
                             )
-                            .padding(20.dp)
+                            .padding(24.dp)
                     ) {
                         Column {
                             Text(
-                                text = "Total Net Balance",
-                                style = MaterialTheme.typography.labelMedium,
+                                text = "Total balance",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White.copy(alpha = 0.8f)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "$symbol${String.format("%.2f", data.balance)}",
                                 fontSize = 36.sp,
@@ -192,6 +207,58 @@ fun DashboardScreen(
                     }
                 }
 
+                // Quick Action Buttons Row (matching screenshot 1)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            bottomSheetDefaultType = "expense"
+                            showBottomSheet = true
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("Add Expense", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    }
+
+                    Button(
+                        onClick = {
+                            bottomSheetDefaultType = "income"
+                            showBottomSheet = true
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("Add Income", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                if (showBottomSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showBottomSheet = false },
+                        sheetState = sheetState
+                    ) {
+                        TransactionFormBottomSheet(
+                            transaction = null,
+                            viewModel = viewModel,
+                            defaultType = bottomSheetDefaultType,
+                            onDismiss = { showBottomSheet = false }
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -229,19 +296,47 @@ fun DashboardScreen(
                     }
                 }
 
-                // 3. Line Chart - 6 Months Income vs Expense
-                Text(
-                    text = "Income vs Expense (Last 6 Months)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                // 3. Line Chart with Range Selector (Last Day, Last Week, Last Month, Last 6M, Last Year)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Cash flow",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val ranges = mapOf(
+                    "1d" to "Last Day",
+                    "1w" to "Last Week",
+                    "1m" to "Last Month",
+                    "6m" to "Last 6M",
+                    "1y" to "Last Year"
                 )
+                val currentRange by viewModel.chartRange.collectAsState()
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(ranges.toList()) { (key, label) ->
+                        FilterChip(
+                            selected = (currentRange == key),
+                            onClick = { viewModel.chartRange.value = key },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     LineChart(
-                        data = data.last6Months,
+                        data = viewModel.getChartDataForRange(currentRange),
                         modifier = Modifier.padding(16.dp)
                     )
                 }

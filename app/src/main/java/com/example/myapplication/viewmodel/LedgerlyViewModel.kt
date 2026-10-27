@@ -1,10 +1,12 @@
 package com.example.myapplication.viewmodel
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.local.TokenStore
 import com.example.myapplication.model.Budget
 import com.example.myapplication.model.BudgetRequest
 import com.example.myapplication.model.CategoryBreakdown
@@ -28,10 +30,13 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.coroutineScope
 
 class LedgerlyViewModel(
+    application: Application
+) : AndroidViewModel(application) {
+
     private val repository: LedgerlyRepository = LedgerlyRepository()
-) : ViewModel() {
 
     // Shared StateFlow Cache across all tabs
     private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
@@ -61,6 +66,90 @@ class LedgerlyViewModel(
 
     val budgetMonth = MutableStateFlow(getCurrentMonth())
     val reportRange = MutableStateFlow("7d")
+    val chartRange = MutableStateFlow("6m") // "1d", "1w", "1m", "6m", "1y"
+
+    fun getChartDataForRange(range: String): List<MonthStat> {
+        val allTxs = _transactions.value
+        val cal = Calendar.getInstance()
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val monthFormat = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+        val result = mutableListOf<MonthStat>()
+
+        when (range) {
+            "1d" -> {
+                val todayStr = getTodayDate()
+                var inc = 0.0
+                var exp = 0.0
+                allTxs.filter { it.date == todayStr }.forEach {
+                    if (it.type.equals("income", ignoreCase = true)) inc += it.amount
+                    else if (it.type.equals("expense", ignoreCase = true)) exp += it.amount
+                }
+                result.add(MonthStat("Today", inc, exp))
+            }
+            "1w" -> {
+                for (i in 6 downTo 0) {
+                    val tempCal = Calendar.getInstance()
+                    tempCal.add(Calendar.DAY_OF_YEAR, -i)
+                    val dStr = format.format(tempCal.time)
+                    val label = SimpleDateFormat("EEE", Locale.getDefault()).format(tempCal.time)
+
+                    var inc = 0.0
+                    var exp = 0.0
+                    allTxs.filter { it.date == dStr }.forEach {
+                        if (it.type.equals("income", ignoreCase = true)) inc += it.amount
+                        else if (it.type.equals("expense", ignoreCase = true)) exp += it.amount
+                    }
+                    result.add(MonthStat(label, inc, exp))
+                }
+            }
+            "1m" -> {
+                for (i in 3 downTo 0) {
+                    val tempCal = Calendar.getInstance()
+                    tempCal.add(Calendar.WEEK_OF_MONTH, -i)
+                    val label = "W${4 - i}"
+
+                    var inc = 0.0
+                    var exp = 0.0
+                    result.add(MonthStat(label, inc, exp))
+                }
+            }
+            "6m" -> {
+                val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                for (i in 5 downTo 0) {
+                    val tempCal = cal.clone() as Calendar
+                    tempCal.add(Calendar.MONTH, -i)
+                    val mStr = monthFormat.format(tempCal.time)
+                    val label = monthNames[tempCal.get(Calendar.MONTH)]
+
+                    var inc = 0.0
+                    var exp = 0.0
+                    allTxs.filter { it.date.startsWith(mStr) }.forEach {
+                        if (it.type.equals("income", ignoreCase = true)) inc += it.amount
+                        else if (it.type.equals("expense", ignoreCase = true)) exp += it.amount
+                    }
+                    result.add(MonthStat(label, inc, exp))
+                }
+            }
+            "1y" -> {
+                val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                for (i in 11 downTo 0) {
+                    val tempCal = cal.clone() as Calendar
+                    tempCal.add(Calendar.MONTH, -i)
+                    val mStr = monthFormat.format(tempCal.time)
+                    val label = monthNames[tempCal.get(Calendar.MONTH)]
+
+                    var inc = 0.0
+                    var exp = 0.0
+                    allTxs.filter { it.date.startsWith(mStr) }.forEach {
+                        if (it.type.equals("income", ignoreCase = true)) inc += it.amount
+                        else if (it.type.equals("expense", ignoreCase = true)) exp += it.amount
+                    }
+                    result.add(MonthStat(label, inc, exp))
+                }
+            }
+        }
+        return result
+    }
 
     val categories = listOf("All", "Food", "Transport", "Rent", "Medical", "Shopping", "Bills", "Salary", "Others")
     val methods = listOf("card", "cash", "bank", "mobile", "other")
@@ -79,28 +168,23 @@ class LedgerlyViewModel(
             }
 
             try {
-                val tJob = async { repository.getTransactions() }
-                val sJob = async { repository.getSalaries() }
-                val bJob = async { repository.getBudgets(budgetMonth.value) }
-                val dJob = async { repository.getDashboard() }
-                val rJob = async { repository.getReports(reportRange.value) }
+                coroutineScope {
+                    val tJob = async { repository.getTransactions() }
+                    val sJob = async { repository.getSalaries() }
+                    val bJob = async { repository.getBudgets(budgetMonth.value) }
+                    val dJob = async { repository.getDashboard() }
+                    val rJob = async { repository.getReports(reportRange.value) }
 
-                val txs = tJob.await()
-                val sals = sJob.await()
-                val budgs = bJob.await()
-                val dash = dJob.await()
-                val rep = rJob.await()
-
-                _transactions.value = txs
-                _salaries.value = sals
-                _budgets.value = budgs
-                _dashboard.value = dash
-                _reports.value = rep
-
+                    _transactions.value = tJob.await()
+                    _salaries.value = sJob.await()
+                    _budgets.value = bJob.await()
+                    _dashboard.value = dJob.await()
+                    _reports.value = rJob.await()
+                }
             } catch (e: Exception) {
                 Log.e("LedgerlyVM", "Parallel load error: ${e.message}", e)
                 if (isInitial) {
-                    snackbarMessage.value = "Failed to connect: ${e.localizedMessage}"
+                    snackbarMessage.value = "Cannot connect to server. Please check if backend is running."
                 }
             } finally {
                 isInitialLoading.value = false

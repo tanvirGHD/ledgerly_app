@@ -123,7 +123,7 @@ class AuthViewModel(
                 val json = JSONObject(body)
                 json.optString("error", "Authentication failed.")
             } else "Server error (${e.code()})"
-        } catch (ex: Exception) {
+        } catch (_: Exception) {
             "Error: ${e.message()}"
         }
     }

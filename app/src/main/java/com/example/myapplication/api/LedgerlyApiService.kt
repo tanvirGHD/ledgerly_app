@@ -100,7 +100,7 @@ interface LedgerlyApiService {
 
 // Retrofit instance with bearer token authorization and Windows firewall fallback
 object RetrofitInstance {
-    private const val PRIMARY_BASE_URL = "http://10.0.2.2:3000/"
+    private const val PRIMARY_BASE_URL = "http://127.0.0.1:3000/"
 
     private var tokenStore: TokenStore? = null
     private var onUnauthorizedCallback: (() -> Unit)? = null
@@ -126,23 +126,7 @@ object RetrofitInstance {
                 }
 
                 val request = requestBuilder.build()
-                var response: okhttp3.Response
-
-                try {
-                    response = chain.proceed(request)
-                } catch (e: Exception) {
-                    if (request.url().host() == "10.0.2.2") {
-                        val fallbackUrl = request.url().newBuilder()
-                            .host("127.0.0.1")
-                            .build()
-                        val fallbackRequest = request.newBuilder()
-                            .url(fallbackUrl)
-                            .build()
-                        response = chain.proceed(fallbackRequest)
-                    } else {
-                        throw e
-                    }
-                }
+                val response: okhttp3.Response = chain.proceed(request)
 
                 if (response.code() == 401) {
                     tokenStore?.clear()
